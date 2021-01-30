@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package envoy.extensions.filters.http.waf.v3;
+
+import "google/protobuf/wrappers.proto";
+
+import "udpa/annotations/status.proto";
+import "udpa/annotations/versioning.proto";
+import "validate/validate.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.filters.http.waf.v3";
+option java_outer_classname = "WafProto";
+option java_multiple_files = true;
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+message WAFCategoryGeneric {
+}
+
+message WAFCategoryOSCI {
+}
+
+message WAFCategoryXSS {
+  enum XSSSubcategory { TAG_INSERTION = 0; }
+
+  XSSSubcategory subcategory = 1;
+}
+
+message WAFCategorySQLI {
+  enum SQLISubcategory {
+    BUILTIN_FUNCTION_INVOCATION = 0;
+    ESCAPE_CHARACTER = 1;
+    STATEMENT = 2;
+    STATEMENT_INJECTION = 3;
+  }
+
+  SQLISubcategory subcategory = 1;
+}
+
+message WAFCategory {
+  oneof category {
+    option (validate.required) = true;
+
+    WAFCategoryGeneric generic = 1;
+
+    WAFCategoryOSCI osci = 2;
+
+    WAFCategoryXSS xss = 3;
+
+    WAFCategorySQLI sqli = 4;
+  }
+}
+
+// [#next-free-field: 8]
+message WAFSignature {
+  uint32 id = 1;
+
+  string name = 2;
+
+  string msg = 3;
+
+  string operand = 4;
+
+  int32 severity = 5;
+
+  int32 certainity = 6;
+
+  WAFCategory category = 7;
+}
+
+message WAF {
+  repeated WAFSignature signatures = 1;
+}

@@ -86,6 +86,7 @@ public:
   const std::string KillRequest = "envoy.filters.http.kill_request";
   // External Processing filter
   const std::string ExternalProcessing = "envoy.filters.http.ext_proc";
+  const std::string WAF = "envoy.filters.http.waf";
 };
 
 using HttpFilterNames = ConstSingleton<HttpFilterNameValues>;
