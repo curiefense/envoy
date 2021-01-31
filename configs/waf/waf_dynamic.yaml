@@ -48,10 +48,10 @@ static_resources:
                 route:
                   host_rewrite_literal: localname
                   cluster: service_envoyproxy_io
-                metadata:
-                  filter_metadata:
-                    envoy.filters.http.waf:
-                      xff_trusted_hops: 1
+                typed_per_filter_config:
+                  envoy.filters.http.waf:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.waf.v3.WAFPerRoute
+                    xff_trusted_hops: 1 
           http_filters:
           - name: waf
             config_discovery:

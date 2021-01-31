@@ -1,4 +1,9 @@
 #include "extensions/filters/http/waf/config.h"
+
+#include "envoy/extensions/filters/http/waf/v3/waf.pb.h"
+#include "envoy/extensions/filters/http/waf/v3/waf.pb.validate.h"
+#include "envoy/registry/registry.h"
+
 #include "extensions/filters/http/waf/waf_filter.h"
 
 namespace Envoy {
@@ -16,6 +21,13 @@ Http::FilterFactoryCb WAFFilterFactory::createFilterFactoryFromProtoTyped(
     auto filter = new WAFFilter(config);
     callbacks.addStreamDecoderFilter(Http::StreamDecoderFilterSharedPtr{filter});
   };
+}
+
+Router::RouteSpecificFilterConfigConstSharedPtr
+WAFFilterFactory::createRouteSpecificFilterConfigTyped(
+    const envoy::extensions::filters::http::waf::v3::WAFPerRoute& proto_config,
+    Server::Configuration::ServerFactoryContext& context, ProtobufMessage::ValidationVisitor&) {
+  return std::make_shared<WAFFilterConfigPerRoute>(proto_config, context);
 }
 
 /**

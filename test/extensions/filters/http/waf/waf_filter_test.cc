@@ -8,6 +8,7 @@
 #include "extensions/filters/http/waf/waf_filter.h"
 #include "extensions/filters/http/well_known_names.h"
 
+#include "test/mocks/server/factory_context.h"
 #include "test/mocks/http/mocks.h"
 #include "test/mocks/stream_info/mocks.h"
 #include "test/test_common/utility.h"
@@ -137,11 +138,13 @@ public:
     filter_->setDecoderFilterCallbacks(decoder_callbacks_);
     EXPECT_CALL(decoder_callbacks_, streamInfo()).WillRepeatedly(ReturnRef(req_info_));
 
-    auto& filter_metadata = *metadata_.mutable_filter_metadata();
-    (*filter_metadata[HttpFilters::HttpFilterNames::get().WAF].mutable_fields())["xff_trusted_hops"]
-        .set_number_value(xff_trusted_hops);
-    EXPECT_CALL(decoder_callbacks_.route_->route_entry_, metadata())
-        .WillOnce(testing::ReturnRef(metadata_));
+    envoy::extensions::filters::http::waf::v3::WAFPerRoute config_route;
+    config_route.set_xff_trusted_hops(xff_trusted_hops);
+    config_route_ =
+        std::make_unique<WAFFilterConfigPerRoute>(config_route, server_factory_context_);
+    EXPECT_CALL(decoder_callbacks_.route_->route_entry_.virtual_host_,
+                perFilterConfig(HttpFilterNames::get().WAF))
+        .WillOnce(Return(config_route_.get()));
   }
 
   void cleanup() { filter_->onDestroy(); }
@@ -161,7 +164,9 @@ protected:
   }
 
   WAFFilterConfigSharedPtr config_;
+  std::unique_ptr<WAFFilterConfigPerRoute> config_route_;
   std::shared_ptr<WAFFilter> filter_;
+  NiceMock<Server::Configuration::MockServerFactoryContext> server_factory_context_;
   NiceMock<Http::MockStreamDecoderFilterCallbacks> decoder_callbacks_;
   NiceMock<Envoy::StreamInfo::MockStreamInfo> req_info_;
   envoy::config::core::v3::Metadata metadata_;

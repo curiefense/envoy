@@ -6,9 +6,10 @@
 #include <functional>
 
 #include "absl/strings/string_view.h"
-#include "extensions/filters/http/common/pass_through_filter.h"
-#include "envoy/extensions/filters/http/waf/v3/waf.pb.h"
 #include "common/common/regex.h"
+#include "envoy/extensions/filters/http/waf/v3/waf.pb.h"
+#include "envoy/server/factory_context.h"
+#include "extensions/filters/http/common/pass_through_filter.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -44,6 +45,19 @@ private:
 
 using WAFFilterConfigSharedPtr = std::shared_ptr<WAFFilterConfig>;
 
+class WAFFilterConfigPerRoute : public Router::RouteSpecificFilterConfig {
+public:
+  WAFFilterConfigPerRoute(const envoy::extensions::filters::http::waf::v3::WAFPerRoute& config,
+                          Server::Configuration::ServerFactoryContext& context);
+
+  ~WAFFilterConfigPerRoute() override = default;
+
+  uint32_t xff_trusted_hops() const { return xff_trusted_hops_; }
+
+private:
+  uint32_t xff_trusted_hops_;
+};
+
 struct WAFFilterResult {
   // Has no error when constructed
   WAFFilterResult() = default;
@@ -64,10 +78,8 @@ public:
   WAFFilter(WAFFilterConfigSharedPtr);
   ~WAFFilter() override;
 
-  // Http::StreamFilterBase
   void onDestroy() override;
 
-  // Http::StreamDecoderFilter
   Http::FilterHeadersStatus decodeHeaders(Http::RequestHeaderMap&, bool) override;
   Http::FilterDataStatus decodeData(Buffer::Instance&, bool) override;
   void setDecoderFilterCallbacks(Http::StreamDecoderFilterCallbacks&) override;
@@ -77,7 +89,7 @@ private:
   void filterParams(WAFFilterResult& fres, RequestParameters const& params) const;
   void filterString(WAFFilterResult& fres, absl::string_view str) const;
 
-  const ProtobufWkt::Struct& getRouteMetadata() const;
+  const WAFFilterConfigPerRoute* getRouteConfig() const;
 
   const WAFFilterConfigSharedPtr config_;
   Http::StreamDecoderFilterCallbacks* decoder_callbacks_;

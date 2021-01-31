@@ -19,6 +19,9 @@ envoy_extension_cc_test(
     extension_name = "envoy.filters.http.waf",
     deps = [
         "//source/extensions/filters/http/waf:config",
+        "//test/mocks/api:api_mocks",
+        "//test/mocks/http:http_mocks",
+        "//test/mocks/server:factory_context_mocks",
         "//test/integration:http_integration_lib",
         "//test/test_common:simulated_time_system_lib",
         "//test/test_common:utility_lib",

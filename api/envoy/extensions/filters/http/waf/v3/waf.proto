@@ -70,3 +70,7 @@ message WAFSignature {
 message WAF {
   repeated WAFSignature signatures = 1;
 }
+
+message WAFPerRoute {
+  uint32 xff_trusted_hops = 1 [(validate.rules).uint32 = {gte: 1}];
+}

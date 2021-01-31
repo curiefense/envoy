@@ -144,7 +144,7 @@ static absl::string_view getClientIP(const absl::string_view xff, const unsigned
 static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
                                                  RequestParameters const& params,
                                                  Http::RequestHeaderMap const& headers,
-                                                 ProtobufWkt::Struct const& route_metadata) {
+                                                 const WAFFilterConfigPerRoute* route_config) {
   ProtobufWkt::Struct value;
   auto& fields = *value.mutable_fields();
   auto& request_info = *fields["request.info"].mutable_struct_value()->mutable_fields();
@@ -153,22 +153,16 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
   // First, create the "attrs" metadata
   //
 
-  auto& ri_attrs_struct = *request_info["attrs"].mutable_struct_value();
-  // Copy all route metadata into attrs
-  ri_attrs_struct = route_metadata;
-  auto& ri_attrs = *ri_attrs_struct.mutable_fields();
+  auto& ri_attrs = *request_info["attrs"].mutable_struct_value()->mutable_fields();
+  // Copy all route config into attrs
+  uint32_t trusted_hops = route_config ? route_config->xff_trusted_hops() : 1U;
+  trusted_hops = std::max(trusted_hops, 1U);
+  ri_attrs["xff_trusted_hops"].set_number_value(trusted_hops);
 
   // Compute client address. This is based on xff_trusted_hops, which gives the
   // number of hops we trust in the X-Forwaded-For header. xff_trusted_hops is
   // set as a route metadata in the envoy configuration.
   {
-    auto it_trusted_hops = route_metadata.fields().find("xff_trusted_hops");
-    int32_t trusted_hops = 1;
-    if (it_trusted_hops != ri_attrs.end()) {
-      trusted_hops = it_trusted_hops->second.number_value();
-      trusted_hops = std::max(trusted_hops, 1);
-    }
-
     absl::string_view xff;
     if (auto* xffh = headers.ForwardedFor()) {
       xff = xffh->value().getStringView();
@@ -233,6 +227,11 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
   return value;
 }
 
+WAFFilterConfigPerRoute::WAFFilterConfigPerRoute(
+    const envoy::extensions::filters::http::waf::v3::WAFPerRoute& config,
+    Server::Configuration::ServerFactoryContext&)
+    : xff_trusted_hops_(config.xff_trusted_hops()) {}
+
 WAFFilterConfig::WAFFilterConfig(
     const envoy::extensions::filters::http::waf::v3::WAF& proto_config) {
   const auto& pbsigns = proto_config.signatures();
@@ -287,14 +286,9 @@ void WAFFilter::filterParams(WAFFilterResult& fres, RequestParameters const& par
   FilterContainer(params.decoded_query());
 }
 
-const ProtobufWkt::Struct& WAFFilter::getRouteMetadata() const {
-  const auto& metadata = decoder_callbacks_->route()->routeEntry()->metadata();
-  const auto& filter_it =
-      metadata.filter_metadata().find(Extensions::HttpFilters::HttpFilterNames::get().WAF);
-  if (filter_it != metadata.filter_metadata().end()) {
-    return filter_it->second;
-  }
-  return ProtobufWkt::Struct::default_instance();
+const WAFFilterConfigPerRoute* WAFFilter::getRouteConfig() const {
+  return Http::Utility::resolveMostSpecificPerFilterConfig<WAFFilterConfigPerRoute>(
+      HttpFilterNames::get().WAF, decoder_callbacks_->route());
 }
 
 Http::FilterHeadersStatus WAFFilter::decodeHeaders(Http::RequestHeaderMap& headers, bool) {
@@ -302,10 +296,10 @@ Http::FilterHeadersStatus WAFFilter::decodeHeaders(Http::RequestHeaderMap& heade
   WAFFilterResult fres;
   filterParams(fres, params);
 
-  const ProtobufWkt::Struct& route_metadata = getRouteMetadata();
+  const WAFFilterConfigPerRoute* route_config = getRouteConfig();
 
   // Add metadata (used for logs)
-  const auto metadata = createRequestMetadata(fres, params, headers, route_metadata);
+  const auto metadata = createRequestMetadata(fres, params, headers, route_config);
   decoder_callbacks_->streamInfo().setDynamicMetadata(
       Extensions::HttpFilters::HttpFilterNames::get().WAF, metadata);
 
