@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "absl/strings/string_view.h"
+#include "common/http/utility.h"
 #include "common/common/regex.h"
 #include "envoy/extensions/filters/http/waf/v3/waf.pb.h"
 #include "envoy/server/factory_context.h"
@@ -27,6 +28,49 @@ struct WAFSignature {
   int32_t severity;
   int32_t certainity;
   envoy::extensions::filters::http::waf::v3::WAFCategory category;
+};
+
+struct RequestParameters {
+  using HeadersParamsTy = std::vector<std::pair<absl::string_view, absl::string_view>>;
+  using CookiesParamsTy = HeadersParamsTy;
+
+  RequestParameters() = default;
+  RequestParameters(RequestParameters const&) = default;
+  RequestParameters(RequestParameters&&) = default;
+  RequestParameters& operator=(RequestParameters const&) = default;
+  RequestParameters& operator=(RequestParameters&&) = default;
+
+  static RequestParameters fromHeaders(Http::RequestHeaderMap const& headers);
+
+  HeadersParamsTy const& headers() const { return headers_; }
+  CookiesParamsTy const& cookies() const { return cookies_; }
+  Http::Utility::QueryParams const& decoded_query() const { return decoded_query_; }
+  Http::Utility::QueryParams const& decoded_form_data() const { return decoded_form_data_; }
+  Http::Utility::QueryParams& mutable_decoded_form_data() { return decoded_form_data_; }
+  absl::string_view raw_query() const { return raw_query_; }
+  absl::string_view content_type() const { return content_type_; }
+  absl::string_view path() const { return path_; }
+  absl::string_view method() const { return method_; }
+  absl::string_view query() const { return query_; }
+  absl::string_view forwaded_for() const { return forwaded_for_; }
+  void setHugeFormData() { huge_form_data_ = true; }
+  bool hugeFormData() const { return huge_form_data_; }
+
+  bool hasFormUrlEncodedData() const;
+  bool hasFormData() const;
+
+private:
+  HeadersParamsTy headers_;
+  CookiesParamsTy cookies_;
+  Http::Utility::QueryParams decoded_query_;
+  Http::Utility::QueryParams decoded_form_data_;
+  absl::string_view raw_query_;
+  absl::string_view content_type_;
+  absl::string_view path_;
+  absl::string_view method_;
+  absl::string_view query_;
+  absl::string_view forwaded_for_;
+  bool huge_form_data_ = false;
 };
 
 using WAFSignaturesTy = std::vector<WAFSignature>;
@@ -91,10 +135,14 @@ private:
 
   const WAFFilterConfigPerRoute* getRouteConfig() const;
 
+  void updateParamsWithUrlEncodedForm(Buffer::Instance& buf);
+  WAFFilterResult finishFiltering();
+
   const WAFFilterConfigSharedPtr config_;
   Http::StreamDecoderFilterCallbacks* decoder_callbacks_;
 
   WAFSignaturesTy const& signatures() const;
+  RequestParameters params_;
 };
 
 } // namespace WAF

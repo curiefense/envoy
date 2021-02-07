@@ -10,7 +10,6 @@
 #include "extensions/filters/http/well_known_names.h"
 #include "envoy/config/core/v3/base.pb.h"
 #include "common/http/headers.h"
-#include "common/http/utility.h"
 #include "common/protobuf/message_validator_impl.h"
 #include "common/protobuf/protobuf.h"
 
@@ -37,29 +36,6 @@ uint32_t bswap32(uint32_t v) {
 #endif
 
 } // namespace
-
-struct RequestParameters {
-  using HeadersParamsTy = std::vector<std::pair<absl::string_view, absl::string_view>>;
-  using CookiesParamsTy = HeadersParamsTy;
-
-  RequestParameters(RequestParameters const&) = default;
-  RequestParameters(RequestParameters&&) = default;
-
-  static RequestParameters fromHeaders(Http::RequestHeaderMap const& headers);
-
-  HeadersParamsTy const& headers() const { return headers_; }
-  HeadersParamsTy const& cookies() const { return cookies_; }
-  Http::Utility::QueryParams const& decoded_query() const { return decoded_query_; }
-  absl::string_view raw_query() const { return raw_query_; }
-
-private:
-  RequestParameters() = default;
-
-  HeadersParamsTy headers_;
-  CookiesParamsTy cookies_;
-  Http::Utility::QueryParams decoded_query_;
-  absl::string_view raw_query_;
-};
 
 // Based on Http::Utility::parseCookieValue
 template <class Func> static void parseCookie(absl::string_view value, Func keyvalue_func) {
@@ -96,6 +72,22 @@ RequestParameters RequestParameters::fromHeaders(Http::RequestHeaderMap const& h
     }
   }
 
+  if (auto* content_type = headers_map.ContentType()) {
+    ret.content_type_ = content_type->value().getStringView();
+  }
+
+  if (auto* path = headers_map.Path()) {
+    ret.path_ = path->value().getStringView();
+  }
+
+  if (auto* method = headers_map.Method()) {
+    ret.method_ = method->value().getStringView();
+  }
+
+  if (auto* xff = headers_map.ForwardedFor()) {
+    ret.forwaded_for_ = xff->value().getStringView();
+  }
+
   // Parse headers & cookies
   ret.headers_.reserve(headers_map.size());
   headers_map.iterate([&ret](const Http::HeaderEntry& header) -> Http::HeaderMap::Iterate {
@@ -117,6 +109,12 @@ RequestParameters RequestParameters::fromHeaders(Http::RequestHeaderMap const& h
   });
   return ret;
 }
+
+bool RequestParameters::hasFormUrlEncodedData() const {
+  return absl::StartsWith(content_type(), Http::Headers::get().ContentTypeValues.FormUrlEncoded);
+}
+
+bool RequestParameters::hasFormData() const { return hasFormUrlEncodedData(); }
 
 static absl::string_view getClientIP(const absl::string_view xff, const unsigned trusted_hops) {
   // Insipired from
@@ -143,7 +141,6 @@ static absl::string_view getClientIP(const absl::string_view xff, const unsigned
 
 static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
                                                  RequestParameters const& params,
-                                                 Http::RequestHeaderMap const& headers,
                                                  const WAFFilterConfigPerRoute* route_config) {
   ProtobufWkt::Struct value;
   auto& fields = *value.mutable_fields();
@@ -163,10 +160,7 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
   // number of hops we trust in the X-Forwaded-For header. xff_trusted_hops is
   // set as a route metadata in the envoy configuration.
   {
-    absl::string_view xff;
-    if (auto* xffh = headers.ForwardedFor()) {
-      xff = xffh->value().getStringView();
-    }
+    const absl::string_view xff = params.forwaded_for();
     const absl::string_view client_ip = getClientIP(xff, trusted_hops);
     *ri_attrs["ip"].mutable_string_value() = client_ip;
     struct in_addr intaddr;
@@ -195,13 +189,8 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
   }
 
   // And finally set remaining attributes
-  if (auto* path = headers.Path()) {
-    const auto& pathv = path->value();
-    *ri_attrs["path"].mutable_string_value() = pathv.getStringView();
-  }
-  if (auto* method = headers.Method()) {
-    *ri_attrs["method"].mutable_string_value() = method->value().getStringView();
-  }
+  *ri_attrs["path"].mutable_string_value() = params.path();
+  *ri_attrs["method"].mutable_string_value() = params.method();
   *ri_attrs["query"].mutable_string_value() = params.raw_query();
 
   //
@@ -223,6 +212,10 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
   auto& ri_args = *request_info["args"].mutable_struct_value()->mutable_fields();
   for (auto const& q : params.decoded_query()) {
     *ri_args[q.first].mutable_string_value() = q.second;
+  }
+  auto& ri_args_form = *request_info["args_form"].mutable_struct_value()->mutable_fields();
+  for (auto const& q : params.decoded_form_data()) {
+    *ri_args_form[q.first].mutable_string_value() = q.second;
   }
   return value;
 }
@@ -284,6 +277,7 @@ void WAFFilter::filterParams(WAFFilterResult& fres, RequestParameters const& par
   FilterContainer(params.headers());
   FilterContainer(params.cookies());
   FilterContainer(params.decoded_query());
+  FilterContainer(params.decoded_form_data());
 }
 
 const WAFFilterConfigPerRoute* WAFFilter::getRouteConfig() const {
@@ -291,27 +285,52 @@ const WAFFilterConfigPerRoute* WAFFilter::getRouteConfig() const {
       HttpFilterNames::get().WAF, decoder_callbacks_->route());
 }
 
-Http::FilterHeadersStatus WAFFilter::decodeHeaders(Http::RequestHeaderMap& headers, bool) {
-  const RequestParameters params = RequestParameters::fromHeaders(headers);
+WAFFilterResult WAFFilter::finishFiltering() {
   WAFFilterResult fres;
-  filterParams(fres, params);
+  filterParams(fres, params_);
 
   const WAFFilterConfigPerRoute* route_config = getRouteConfig();
-
-  // Add metadata (used for logs)
-  const auto metadata = createRequestMetadata(fres, params, headers, route_config);
+  const auto metadata = createRequestMetadata(fres, params_, route_config);
   decoder_callbacks_->streamInfo().setDynamicMetadata(
       Extensions::HttpFilters::HttpFilterNames::get().WAF, metadata);
 
   if (fres.hasError()) {
     abortWithStatus(Http::Code::NotAcceptable, fres.signsBegin()->get().msg);
-    return Http::FilterHeadersStatus::StopIteration;
+  }
+  return fres;
+}
+
+Http::FilterHeadersStatus WAFFilter::decodeHeaders(Http::RequestHeaderMap& headers,
+                                                   bool end_stream) {
+  params_ = RequestParameters::fromHeaders(headers);
+
+  if (end_stream || !params_.hasFormData()) {
+    return finishFiltering().hasError() ? Http::FilterHeadersStatus::StopIteration
+                                        : Http::FilterHeadersStatus::Continue;
   }
 
   return Http::FilterHeadersStatus::Continue;
 }
 
-Http::FilterDataStatus WAFFilter::decodeData(Buffer::Instance&, bool) {
+void WAFFilter::updateParamsWithUrlEncodedForm(Buffer::Instance& buf) {
+  // TODO: plugin configuration variable
+  if (buf.length() >= 10 * 1024 * 1024) {
+    params_.setHugeFormData();
+    return;
+  }
+  const std::string data = buf.toString();
+  const auto decq = Http::Utility::parseFromBody(data);
+  params_.mutable_decoded_form_data().insert(decq.begin(), decq.end());
+}
+
+Http::FilterDataStatus WAFFilter::decodeData(Buffer::Instance& buf, bool end_stream) {
+  if (params_.hasFormUrlEncodedData()) {
+    updateParamsWithUrlEncodedForm(buf);
+  }
+  if (end_stream) {
+    return finishFiltering().hasError() ? Http::FilterDataStatus::StopIterationNoBuffer
+                                        : Http::FilterDataStatus::Continue;
+  }
   return Http::FilterDataStatus::Continue;
 }
 
