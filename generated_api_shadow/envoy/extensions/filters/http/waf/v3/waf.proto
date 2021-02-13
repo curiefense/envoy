@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package envoy.extensions.filters.http.waf.v3;
 
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
 
 import "udpa/annotations/status.proto";
@@ -67,8 +68,91 @@ message WAFSignature {
   WAFCategory category = 7;
 }
 
+message WAFRuleEntryMatchMap {
+  enum Field {
+    args = 0;
+    cookies = 1;
+    headers = 2;
+  }
+
+  Field field = 1;
+
+  string key = 2;
+}
+
+message WAFRuleEntryMatchValue {
+  enum Field {
+    path = 0;
+    query = 1;
+    uri = 2;
+    country = 3;
+    method = 4;
+    asn = 5;
+    ip = 6;
+  }
+
+  Field field = 1;
+}
+
+message WAFRuleEntry {
+  string description = 1;
+
+  oneof entry {
+    option (validate.required) = true;
+
+    WAFRuleEntryMatchValue value = 2;
+
+    WAFRuleEntryMatchMap map = 3;
+  }
+
+  string pattern = 4;
+}
+
+message WAFRuleSection {
+  enum Relation {
+    OR = 0;
+    AND = 1;
+  }
+
+  Relation relation = 1;
+
+  repeated WAFRuleEntry entries = 2;
+}
+
+message WAFRule {
+  enum Relation {
+    OR = 0;
+    AND = 1;
+  }
+
+  Relation relation = 1;
+
+  repeated WAFRuleSection sections = 2;
+}
+
+// [#next-free-field: 9]
+message WAFTagRule {
+  string id = 1;
+
+  string name = 2;
+
+  string source = 3;
+
+  google.protobuf.Timestamp mdate = 4;
+
+  string notes = 5;
+
+  bool active = 6;
+
+  repeated string tags = 7 [(validate.rules).repeated = {min_items: 1}];
+
+  WAFRule rule = 8 [(validate.rules).message = {required: true}];
+}
+
 message WAF {
   repeated WAFSignature signatures = 1;
+
+  repeated WAFTagRule tagrules = 2;
 }
 
 message WAFPerRoute {

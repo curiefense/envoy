@@ -4,6 +4,7 @@
 #include <regex>
 #include <vector>
 #include <functional>
+#include <unordered_map>
 
 #include "absl/strings/string_view.h"
 #include "common/http/utility.h"
@@ -16,6 +17,11 @@ namespace Envoy {
 namespace Extensions {
 namespace HttpFilters {
 namespace WAF {
+namespace Rules {
+struct Rule;
+}
+
+class WAFFilterConfigPerRoute;
 
 struct WAFSignature {
   static WAFSignature
@@ -31,60 +37,88 @@ struct WAFSignature {
 };
 
 struct RequestParameters {
-  using HeadersParamsTy = std::vector<std::pair<absl::string_view, absl::string_view>>;
+  using HeadersParamsTy = std::unordered_multimap<absl::string_view, absl::string_view>;
   using CookiesParamsTy = HeadersParamsTy;
+  using ArgsParamsTy = std::unordered_map<std::string, std::string>;
 
   RequestParameters() = default;
-  RequestParameters(RequestParameters const&) = default;
   RequestParameters(RequestParameters&&) = default;
-  RequestParameters& operator=(RequestParameters const&) = default;
   RequestParameters& operator=(RequestParameters&&) = default;
 
-  static RequestParameters fromHeaders(Http::RequestHeaderMap const& headers);
+  static RequestParameters create(Http::RequestHeaderMap const& headers_map,
+                                  const WAFFilterConfigPerRoute* route_config);
 
   HeadersParamsTy const& headers() const { return headers_; }
   CookiesParamsTy const& cookies() const { return cookies_; }
-  Http::Utility::QueryParams const& decoded_query() const { return decoded_query_; }
-  Http::Utility::QueryParams const& decoded_form_data() const { return decoded_form_data_; }
-  Http::Utility::QueryParams& mutable_decoded_form_data() { return decoded_form_data_; }
+  ArgsParamsTy const& args() const { return args_; }
+  ArgsParamsTy& mutable_args() { return args_; }
   absl::string_view raw_query() const { return raw_query_; }
   absl::string_view content_type() const { return content_type_; }
   absl::string_view path() const { return path_; }
   absl::string_view method() const { return method_; }
-  absl::string_view query() const { return query_; }
   absl::string_view forwaded_for() const { return forwaded_for_; }
+  absl::string_view client_ip_str() const { return client_ip_str_; }
+  absl::string_view uri() const { return uri_; }
+  Network::Address::Instance const& client_ip() const { return *client_ip_; }
   void setHugeFormData() { huge_form_data_ = true; }
   bool hugeFormData() const { return huge_form_data_; }
 
   bool hasFormUrlEncodedData() const;
   bool hasFormData() const;
+  unsigned trusted_hops() const { return trusted_hops_; }
 
 private:
   HeadersParamsTy headers_;
   CookiesParamsTy cookies_;
-  Http::Utility::QueryParams decoded_query_;
-  Http::Utility::QueryParams decoded_form_data_;
+  ArgsParamsTy args_;
   absl::string_view raw_query_;
   absl::string_view content_type_;
   absl::string_view path_;
   absl::string_view method_;
-  absl::string_view query_;
   absl::string_view forwaded_for_;
+  absl::string_view client_ip_str_;
+  std::string uri_;
+  Network::Address::InstanceConstSharedPtr client_ip_;
   bool huge_form_data_ = false;
+  unsigned trusted_hops_;
 };
 
 using WAFSignaturesTy = std::vector<WAFSignature>;
 
 struct RequestParameters;
 
+class WAFTagRule {
+public:
+  WAFTagRule(const envoy::extensions::filters::http::waf::v3::WAFTagRule& tagrule);
+  WAFTagRule(WAFTagRule&&) = default;
+  WAFTagRule& operator=(WAFTagRule&&) = default;
+
+  ~WAFTagRule();
+
+  absl::string_view id() const { return id_; }
+  absl::string_view name() const { return name_; }
+  Rules::Rule const& rule() const { return *rule_; }
+  auto const& tags() const { return tags_; }
+
+private:
+  std::string id_;
+  std::string name_;
+  std::vector<std::string> tags_;
+  std::unique_ptr<Rules::Rule> rule_;
+};
+
+using WAFTagRulesTy = std::vector<WAFTagRule>;
+
 class WAFFilterConfig {
 public:
   WAFFilterConfig(const envoy::extensions::filters::http::waf::v3::WAF& proto_config);
 
   auto const& signatures() const { return signatures_; }
+  auto const& tagrules() const { return tagrules_; }
 
 private:
   WAFSignaturesTy signatures_;
+  WAFTagRulesTy tagrules_;
 };
 
 using WAFFilterConfigSharedPtr = std::shared_ptr<WAFFilterConfig>;
@@ -107,14 +141,17 @@ struct WAFFilterResult {
   WAFFilterResult() = default;
 
   void addError(WAFSignature const& sign) { signs_.push_back(sign); }
+  void addMatchingTagRule(WAFTagRule const& rule) { tagrules_.push_back(rule); }
 
   bool hasError() const { return !signs_.empty(); }
+  absl::string_view errorMsg() const { return signs_.begin()->get().msg; }
 
-  auto signsBegin() const { return signs_.begin(); }
-  auto signsEnd() const { return signs_.end(); }
+  auto const& signs() const { return signs_; }
+  auto const& tagrules() const { return tagrules_; }
 
 private:
   std::vector<std::reference_wrapper<WAFSignature const>> signs_;
+  std::vector<std::reference_wrapper<WAFTagRule const>> tagrules_;
 };
 
 class WAFFilter : public Http::PassThroughDecoderFilter {
@@ -142,6 +179,8 @@ private:
   Http::StreamDecoderFilterCallbacks* decoder_callbacks_;
 
   WAFSignaturesTy const& signatures() const;
+  WAFTagRulesTy const& tagrules() const;
+
   RequestParameters params_;
 };
 

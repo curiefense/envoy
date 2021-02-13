@@ -251,9 +251,9 @@ TEST_F(WAFIntegrationTest, TestClientIP4) {
   testClientIp("  " TEST_CLIENT_IP "  , 4.4.4.4  , 5.5.5.5   ", 4, "5.5.5.5", 0x05050505);
 }
 
-TEST_F(WAFIntegrationTest, TestClientIPEmptyXFF0) { testClientIp("", 1, "", 0); }
+TEST_F(WAFIntegrationTest, TestClientIPEmptyXFF0) { testClientIp("", 1, "0.0.0.0", 0); }
 
-TEST_F(WAFIntegrationTest, TestClientIPEmptyXFF1) { testClientIp("    ", 1, "", 0); }
+TEST_F(WAFIntegrationTest, TestClientIPEmptyXFF1) { testClientIp("    ", 1, "0.0.0.0", 0); }
 
 TEST_F(WAFIntegrationTest, TestClientIPEmptySplit) {
   testClientIp(TEST_CLIENT_IP ", , ,4.4.4.4", 1, TEST_CLIENT_IP, TEST_CLIENT_IP_NUM);

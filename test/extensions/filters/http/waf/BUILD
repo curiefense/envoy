@@ -27,3 +27,17 @@ envoy_extension_cc_test(
         "//test/test_common:utility_lib",
     ],
 )
+
+envoy_extension_cc_test(
+    name = "rules_test",
+    srcs = [
+        "rules_test.cc",
+    ],
+    extension_name = "envoy.filters.http.waf",
+    deps = [
+        "//source/extensions/filters/http/waf:config",
+        "//test/integration:http_integration_lib",
+        "//test/test_common:simulated_time_system_lib",
+        "//test/test_common:utility_lib",
+    ],
+)

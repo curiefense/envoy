@@ -1,0 +1,89 @@
+resources:
+- '@type': type.googleapis.com/envoy.config.core.v3.TypedExtensionConfig
+  name: waf
+  typed_config:
+    '@type': type.googleapis.com/envoy.extensions.filters.http.waf.v3.WAF
+    signatures:
+    - category:
+        sqli:
+          subcategory: statement_injection
+      certainity: 5
+      id: 1
+      msg: dangerous query
+      name: '1'
+      operand: dangerousquery
+      severity: 5
+    - category:
+        sqli:
+          subcategory: statement_injection
+      certainity: 5
+      id: 2
+      msg: hacker query
+      name: '2'
+      operand: ahackerwashere
+      severity: 5
+    tagrules:
+      - id: "e2e000000000"
+        name: "test rule"
+        source: "self-managed"
+        notes: "my note"
+        active: true
+        tags:
+          - ruletag1
+          - ruletag2
+        rule:
+          relation: OR
+          sections:
+            - relation: OR
+              entries:
+                - value:
+                    field: path
+                  pattern: 'mypath'
+                - value:
+                    field: ip
+                  pattern: '!192.168.0.0/16'
+            - relation: AND
+              entries:
+                - value:
+                    field: path
+                  pattern: 'toto'
+                - value:
+                    field: ip
+                  pattern: '!127.0.0.1/32'
+      - id: "e2e000000001"
+        name: "test rule2"
+        source: "self-managed"
+        notes: "my note"
+        active: true
+        tags:
+          - nototo
+        rule:
+          relation: OR
+          sections:
+            - relation: OR
+              entries:
+                - value:
+                    field: path
+                  pattern: '!toto'
+      - id: "e2e000000002"
+        name: "test rule2"
+        source: "self-managed"
+        notes: "my note"
+        active: true
+        tags:
+          - dangerouscookies
+        rule:
+          relation: OR
+          sections:
+            - relation: AND
+              entries:
+                - map:
+                    field: cookies
+                    key: roger
+                  pattern: '.*toto.*'
+                - map:
+                    field: cookies
+                    key: roger
+                  pattern: '!.*tata.*'
+version_info: '0'
+version_info: '0'

@@ -11,11 +11,12 @@ envoy_extension_package()
 
 envoy_cc_library(
     name = "waf_filter_lib",
-    srcs = ["waf_filter.cc"],
-    hdrs = ["waf_filter.h"],
+    srcs = ["waf_filter.cc","rules.cc"],
+    hdrs = ["waf_filter.h","rules.h","rules_visitor.h"],
     deps = [
         "//source/common/http:headers_lib",
         "//source/common/http:utility_lib",
+        "//source/common/network:lc_trie_lib",
         "//source/common/protobuf",
         "//source/extensions/filters/http/common:pass_through_filter_lib",
         "//source/extensions/filters/http:well_known_names",
