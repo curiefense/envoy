@@ -9,10 +9,22 @@ licenses(["notice"])  # Apache 2
 
 envoy_extension_package()
 
+#envoy_cc_library(
+#    name = "waf_rules_lib",
+#    srcs = ["rules.cc","rules_optimizer.cc","ip_interval_set.cc"],
+#    hdrs = ["rules.h","rules_visitor.h","ip_interval_set.h"],
+#    deps = [
+#        "//source/common/network:lc_trie_lib",
+#        "//source/common/protobuf",
+#        "@envoy_api//envoy/config/core/v3:pkg_cc_proto",
+#        "@envoy_api//envoy/extensions/filters/http/waf/v3:pkg_cc_proto",
+#    ]
+#)
+#
 envoy_cc_library(
     name = "waf_filter_lib",
-    srcs = ["waf_filter.cc","rules.cc"],
-    hdrs = ["waf_filter.h","rules.h","rules_visitor.h"],
+    srcs = ["waf_filter.cc","rules.cc","rules_optimizer.cc","ip_interval_set.cc"],
+    hdrs = ["waf_filter.h","rules.h","rules_visitor.h","ip_interval_set.h"],
     deps = [
         "//source/common/http:headers_lib",
         "//source/common/http:utility_lib",

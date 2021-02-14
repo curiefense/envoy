@@ -538,6 +538,17 @@ public:
     intervals_.insert(Interval(left, right));
   }
 
+  bool contains(Value value) const override {
+    if (intervals_.empty()) {
+      return false;
+    }
+    const auto pos = intervals_.lower_bound(Interval(value, value));
+    if (pos == intervals_.end()) {
+      return false;
+    }
+    return pos->first <= value && value < pos->second;
+  }
+
   std::vector<Interval> toVector() const override {
     return std::vector<Interval>(intervals_.begin(), intervals_.end());
   }

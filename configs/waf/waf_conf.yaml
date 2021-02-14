@@ -85,5 +85,41 @@ resources:
                     field: cookies
                     key: roger
                   pattern: '!.*tata.*'
+      - id: "cidrs"
+        name: "test rule"
+        source: "self-managed"
+        notes: "my note"
+        active: true
+        tags:
+          - cidrs
+        rule:
+          relation: OR
+          sections:
+            - relation: OR
+              entries:
+                - value:
+                    field: ip
+                  pattern: '192.168.0.0/24'
+                - value:
+                    field: ip
+                  pattern: '192.168.1.0/24'
+                - value:
+                    field: ip
+                  pattern: '10.4.0.0/24'
+                - value:
+                    field: path
+                  pattern: 'toto'
+                - value:
+                    field: ip
+                  pattern: '10.0.0.0/8'
+                - value:
+                    field: ip
+                  pattern: '127.0.0.1/32'
+                - value:
+                    field: ip
+                  pattern: '2001::/16'
+                - value:
+                    field: ip
+                  pattern: '2002::/16'
 version_info: '0'
 version_info: '0'

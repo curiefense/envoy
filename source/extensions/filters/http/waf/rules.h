@@ -1,8 +1,10 @@
 #pragma once
-#include <cassert>
 #include <regex>
 #include <ostream>
 
+#include "absl/types/optional.h"
+#include "envoy/extensions/filters/http/waf/v3/waf.pb.h"
+#include "extensions/filters/http/waf/ip_interval_set.h"
 #include "common/network/cidr_range.h"
 
 namespace Envoy {
@@ -16,14 +18,11 @@ namespace Rules {
 
 struct Rule {
   enum class Kind : uint8_t {
-    Unary,
     NOT,
-    UnaryEnd,
-    Nary,
     OR,
     AND,
-    NaryEnd,
     CIDRRange,
+    OptimizedCIDRRanges,
     Path,
     Query,
     Method,
@@ -47,13 +46,12 @@ private:
 using RulePtr = std::unique_ptr<Rule>;
 
 struct UnaryRule : public Rule {
-  UnaryRule(Kind K, RulePtr rule) : Rule(K), rule_(std::move(rule)) {
-    assert(K > Kind::Unary && K < Kind::UnaryEnd);
-  }
+  UnaryRule(Kind K, RulePtr rule) : Rule(K), rule_(std::move(rule)) {}
 
   ~UnaryRule() override = default;
 
   Rule const& rule() const { return *rule_; }
+  RulePtr& mutable_rule() { return rule_; }
 
 private:
   RulePtr rule_;
@@ -64,13 +62,15 @@ struct NOTRule : public UnaryRule {
 };
 
 struct NaryRules : public Rule {
-  NaryRules(Kind K) : Rule(K) { assert(K > Kind::Nary && K < Kind::NaryEnd); }
+  NaryRules(Kind K) : Rule(K) {}
 
   ~NaryRules() override = default;
 
   void add(RulePtr rule);
   void reserve(size_t n) { rules_.reserve(n); }
   auto const& rules() const { return rules_; }
+  auto& mutable_rules() { return rules_; }
+  bool empty() const { return rules_.empty(); }
 
 private:
   std::vector<RulePtr> rules_;
@@ -91,6 +91,18 @@ struct CIDRRangeRule : public Rule {
 
 private:
   Network::Address::CidrRange cidr_;
+};
+
+struct OptimizedCIDRRangesRule : public Rule {
+  OptimizedCIDRRangesRule() : Rule(Kind::OptimizedCIDRRanges) {}
+
+  IPIntervalSet const& intervals() const { return intervals_; }
+  IPIntervalSet& mutable_intervals() { return intervals_; }
+
+  bool contains(Network::Address::Instance const& addr) const { return intervals_.contains(addr); }
+
+private:
+  IPIntervalSet intervals_;
 };
 
 struct RegexRule : public Rule {
@@ -141,6 +153,9 @@ DEF_MAP_RULE(CookiesRule, Cookies)
 DEF_MAP_RULE(HeadersRule, Headers)
 
 #undef DEF_MAP_RULE
+
+// Optimizer
+void optimize(RulePtr& R);
 
 // Evaluator
 bool eval(Rule const& R, RequestParameters const& params);

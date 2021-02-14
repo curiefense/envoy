@@ -28,17 +28,6 @@ struct RcDetailsValues {
 };
 using RcDetails = ConstSingleton<RcDetailsValues>;
 
-#ifdef _MSC_VER
-uint32_t bswap32(uint32_t v) {
-  static_assert(sizeof(uint32_t) == sizeof(unsigned long), "unsigned long isn't 32-bit wide!");
-  return _byteswap_ulong(v);
-}
-#else
-uint32_t bswap32(uint32_t v) {
-  return __builtin_bswap32(v);
-}
-#endif
-
 } // namespace
 
 // Based on Http::Utility::parseCookieValue
@@ -177,9 +166,8 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
     *ri_attrs["ip"].mutable_string_value() = params.client_ip_str();
     auto const* ip = params.client_ip().ip();
     if (auto const* ipv4 = ip->ipv4()) {
-      // Envoy converts in network-order (that is big endian). We want the
-      // number in little endian.
-      ri_attrs["ipnum"].set_number_value(bswap32(ipv4->address()));
+      // Envoy returns the address in network-order.
+      ri_attrs["ipnum"].set_number_value(ntohl(ipv4->address()));
     } else {
       auto const* ipv6 = ip->ipv6();
       assert(ipv6 && "ip should be v4 or v6");
@@ -233,8 +221,9 @@ static ProtobufWkt::Struct createRequestMetadata(WAFFilterResult fres,
 
 WAFTagRule::WAFTagRule(const envoy::extensions::filters::http::waf::v3::WAFTagRule& tagrule)
     : id_(tagrule.id()), name_(tagrule.name()), rule_(Rules::ruleFromProto(tagrule.rule())) {
-  Rules::print(*rule_, std::cout);
-  std::cout << std::endl;
+  if (rule_) {
+    Rules::optimize(rule_);
+  }
   auto const& tags = tagrule.tags();
   tags_.reserve(tags.size());
   std::copy(tags.begin(), tags.end(), std::back_inserter(tags_));

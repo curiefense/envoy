@@ -1,7 +1,10 @@
 #include <ostream>
+#include "absl/numeric/int128.h"
 #include "extensions/filters/http/waf/waf_filter.h"
 #include "extensions/filters/http/waf/rules.h"
 #include "extensions/filters/http/waf/rules_visitor.h"
+#include "common/network/address_impl.h"
+#include "common/network/utility.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -50,6 +53,8 @@ protected:
   }
 
   bool visitRule(CIDRRangeRule const& R) { return R.range().isInRange(params_.client_ip()); }
+
+  bool visitRule(OptimizedCIDRRangesRule const& R) { return R.contains(params_.client_ip()); }
 
   bool visitRule(PathRule const& R) { return evalRegex(R, params_.path()); }
 
@@ -140,6 +145,30 @@ protected:
 
   void visitRule(CIDRRangeRule const& R) { os_ << "CIDR(" << R.range().asString() << ")"; }
 
+  void visitRule(OptimizedCIDRRangesRule const& R) {
+    os_ << "OptimizedCIDR(";
+
+    IPIntervalSet const& intervals = R.intervals();
+    for (auto const& r : intervals.v4set().toVector()) {
+      const uint32_t start = r.first;
+      const uint32_t end = r.second - 1;
+      printIPv4(start);
+      os_ << "-";
+      printIPv4(end);
+      os_ << ",";
+    }
+    for (auto const& r : intervals.v6set().toVector()) {
+      absl::uint128 const& start = r.first;
+      absl::uint128 end = r.second - 1;
+      printIPv6(start);
+      os_ << "-";
+      printIPv6(end);
+      os_ << ",";
+    }
+
+    os_ << ")";
+  }
+
   void visitRule(RegexRule const& R) { os_ << R.name() << "(" << R.pattern() << ")"; }
 
   void visitRule(MapRule const& R) {
@@ -149,6 +178,19 @@ protected:
   }
 
 private:
+  void printIPv4(uint32_t addr) {
+    sockaddr_in in;
+    in.sin_family = AF_INET;
+    in.sin_addr.s_addr = htonl(addr);
+    os_ << Network::Address::Ipv4Instance::sockaddrToString(in);
+  }
+  void printIPv6(absl::uint128 const& addr) {
+    sockaddr_in6 in;
+    in.sin6_family = AF_INET6;
+    const absl::uint128 naddr = Network::Utility::Ip6htonl(addr);
+    memcpy(&in.sin6_addr.s6_addr[0], &naddr, sizeof(naddr));
+    os_ << Network::Address::Ipv6Instance(in).asString();
+  }
   std::ostream& os_;
 };
 } // namespace

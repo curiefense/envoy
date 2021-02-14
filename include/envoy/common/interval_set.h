@@ -34,6 +34,12 @@ public:
   virtual std::vector<Interval> toVector() const PURE;
 
   /**
+   * @param value Value that needs to be checked
+   * @return true if element is in interval set
+   */
+  virtual bool contains(Value value) const PURE;
+
+  /**
    * Clears the contents of the interval set.
    */
   virtual void clear() PURE;
