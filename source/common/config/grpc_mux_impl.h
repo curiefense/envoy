@@ -2,6 +2,7 @@
 
 #include <queue>
 #include <unordered_map>
+#include <memory>
 
 #include "envoy/api/v2/discovery.pb.h"
 #include "envoy/common/time.h"
@@ -26,7 +27,8 @@ namespace Config {
  */
 class GrpcMuxImpl : public GrpcMux,
                     public GrpcStreamCallbacks<envoy::service::discovery::v3::DiscoveryResponse>,
-                    public Logger::Loggable<Logger::Id::config> {
+                    public Logger::Loggable<Logger::Id::config>,
+                    public std::enable_shared_from_this<GrpcMuxImpl> {
 public:
   GrpcMuxImpl(const LocalInfo::LocalInfo& local_info, Grpc::RawAsyncClientPtr async_client,
               Event::Dispatcher& dispatcher, const Protobuf::MethodDescriptor& service_method,
@@ -76,15 +78,15 @@ private:
 
   struct GrpcMuxWatchImpl : public GrpcMuxWatch, RaiiListElement<GrpcMuxWatchImpl*> {
     GrpcMuxWatchImpl(const std::set<std::string>& resources, GrpcMuxCallbacks& callbacks,
-                     const std::string& type_url, GrpcMuxImpl& parent)
-        : RaiiListElement<GrpcMuxWatchImpl*>(parent.api_state_[type_url].watches_, this),
-          resources_(resources), callbacks_(callbacks), type_url_(type_url), parent_(parent),
+                     const std::string& type_url, std::shared_ptr<GrpcMuxImpl> parent)
+        : RaiiListElement<GrpcMuxWatchImpl*>(parent->api_state_[type_url].watches_, this),
+          resources_(resources), callbacks_(callbacks), type_url_(type_url), parent_(std::move(parent)),
           inserted_(true) {}
     ~GrpcMuxWatchImpl() override {
       if (inserted_) {
         erase();
         if (!resources_.empty()) {
-          parent_.sendDiscoveryRequest(type_url_);
+          parent_->sendDiscoveryRequest(type_url_);
         }
       }
     }
@@ -97,7 +99,7 @@ private:
     std::set<std::string> resources_;
     GrpcMuxCallbacks& callbacks_;
     const std::string type_url_;
-    GrpcMuxImpl& parent_;
+    std::shared_ptr<GrpcMuxImpl> parent_;
 
   private:
     bool inserted_;

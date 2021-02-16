@@ -78,7 +78,7 @@ void GrpcMuxImpl::sendDiscoveryRequest(const std::string& type_url) {
 GrpcMuxWatchPtr GrpcMuxImpl::subscribe(const std::string& type_url,
                                        const std::set<std::string>& resources,
                                        GrpcMuxCallbacks& callbacks) {
-  GrpcMuxWatchPtr watch = std::make_unique<GrpcMuxWatchImpl>(resources, callbacks, type_url, *this);
+  GrpcMuxWatchPtr watch = std::make_unique<GrpcMuxWatchImpl>(resources, callbacks, type_url, shared_from_this());
   ENVOY_LOG(debug, "gRPC mux subscribe for " + type_url);
 
   // Lazily kick off the requests based on first subscription. This has the
