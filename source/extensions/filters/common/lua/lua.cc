@@ -41,7 +41,14 @@ void Coroutine::resume(int num_args, const std::function<void()>& yield_callback
     yield_callback();
   } else {
     state_ = State::Finished;
+    ENVOY_LOG(warn, "REBLAZE: entering fixed code path");
     const char* error = lua_tostring(coroutine_state_.get(), -1);
+    if (error) {
+      ENVOY_LOG(warn, "REBLAZE: error={}", error);
+    } else {
+      ENVOY_LOG(warn, "REBLAZE: error is NULL", error);
+      error = "REBLAZE: unexpected lua error";
+    }
     throw LuaException(error);
   }
 }
