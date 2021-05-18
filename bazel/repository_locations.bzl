@@ -1062,4 +1062,16 @@ REPOSITORY_LOCATIONS_SPEC = dict(
         release_date = "2018-12-18",
         cpe = "N/A",
     ),
+    com_github_maxmind_libmaxminddb = dict(
+        project_name = "libmaxminddb",
+        project_desc = "C library for reading MaxMind DB files, including the GeoIP2 databases from MaxMind",
+        project_url = "https://github.com/maxmind/libmaxminddb",
+        version = "1.6.0",
+        sha256 = "7620ac187c591ce21bcd7bf352376a3c56a933e684558a1f6bef4bd4f3f98267",
+        strip_prefix = "libmaxminddb-{version}",
+        urls = ["https://github.com/maxmind/libmaxminddb/releases/download/{version}/libmaxminddb-{version}.tar.gz"],
+        use_category = ["build"],
+        release_date = "2021-04-29",
+        cpe = "cpe:2.3:a:maxmind:libmaxminddb:*",
+    ),
 )

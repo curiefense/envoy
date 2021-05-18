@@ -100,6 +100,20 @@ envoy_cmake_external(
         "//conditions:default": ["libcares.a"],
     }),
 )
+envoy_cmake_external(
+    name = "libmaxminddb",
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "off",
+        "BUILD_TESTING": "no",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_CXX_COMPILER_FORCED": "on",
+    },
+    lib_source = "@com_github_maxmind_libmaxminddb//:all",
+    static_libraries = select({
+        "//bazel:windows_x86_64": ["maxminddb.lib"],
+        "//conditions:default": ["libmaxminddb.a"],
+    }),
+)
 
 envoy_cmake_external(
     name = "curl",

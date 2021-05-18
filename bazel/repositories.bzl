@@ -140,6 +140,7 @@ def envoy_dependencies(skip_targets = []):
     _com_github_jbeder_yaml_cpp()
     _com_github_libevent_libevent()
     _com_github_luajit_luajit()
+    _com_github_maxmind_libmaxminddb()
     _com_github_moonjit_moonjit()
     _com_github_nghttp2_nghttp2()
     _com_github_skyapm_cpp2sky()
@@ -238,6 +239,16 @@ def _com_github_c_ares_c_ares():
     native.bind(
         name = "ares",
         actual = "@envoy//bazel/foreign_cc:ares",
+    )
+
+def _com_github_maxmind_libmaxminddb():
+    external_http_archive(
+        name = "com_github_maxmind_libmaxminddb",
+        build_file_content = BUILD_ALL_CONTENT,
+    )
+    native.bind(
+        name = "libmaxminddb",
+        actual = "@envoy//bazel/foreign_cc:libmaxminddb",
     )
 
 def _com_github_cyan4973_xxhash():
