@@ -106,6 +106,7 @@ EXTENSIONS = {
     "envoy.filters.http.squash":                        "//source/extensions/filters/http/squash:config",
     "envoy.filters.http.tap":                           "//source/extensions/filters/http/tap:config",
     "envoy.filters.http.wasm":                          "//source/extensions/filters/http/wasm:config",
+    "envoy.filters.http.ip_maxmind_lookup":             "//source/extensions/filters/http/ip_maxmind_lookup:config",
 
     #
     # Listener filters

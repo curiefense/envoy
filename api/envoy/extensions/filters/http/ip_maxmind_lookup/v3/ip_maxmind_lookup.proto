@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package envoy.extensions.filters.http.ip_maxmind_lookup.v3;
+
+import "udpa/annotations/migrate.proto";
+import "udpa/annotations/status.proto";
+import "udpa/annotations/versioning.proto";
+import "validate/validate.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.filters.http.ip_maxmind_lookup.v3";
+option java_outer_classname = "IpMaxmindLookupProto";
+option java_multiple_files = true;
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: Ip-Maxmind-Lookup Filter]
+// [#extension: envoy.filters.http.ip_maxmind_lookup]
+
+// [#next-free-field: 6]
+message Config {
+  message SourceMetadata {
+    string ip_metadata_namespace = 1;
+
+    string ip_metadata_key = 2;
+  }
+
+  message SourceRequest {
+    oneof from {
+      // Extract from header
+      string header = 1;
+
+      // Extract from cookie
+      string cookie = 2;
+    }
+  }
+
+  message MMDBData {
+    string out_metadata_key = 1;
+
+    repeated string path = 2;
+  }
+
+  message MMDBLookups {
+    string path = 1;
+
+    repeated MMDBData data = 2;
+  }
+
+  oneof source {
+    SourceMetadata metadata = 1;
+
+    SourceRequest request = 2;
+  }
+
+  string out_metadata_namespace = 3;
+
+  repeated MMDBLookups dbs = 5;
+}

@@ -92,6 +92,8 @@ public:
   const std::string ExternalProcessing = "envoy.filters.http.ext_proc";
   // Set metadata filter
   const std::string SetMetadata = "envoy.filters.http.set_metadata";
+  // Ip Maxmind Looup
+  const std::string IpMaxmindLookup = "envoy.filters.http.ip_maxmind_lookup";
 };
 
 using HttpFilterNames = ConstSingleton<HttpFilterNameValues>;
