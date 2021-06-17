@@ -32,7 +32,8 @@ void Coroutine::start(int function_ref, int num_args, const std::function<void()
 
 void Coroutine::resume(int num_args, const std::function<void()>& yield_callback) {
   ASSERT(state_ == State::Yielded);
-  int rc = lua_resume(coroutine_state_.get(), num_args);
+  lua_State *L = coroutine_state_.get();
+  int rc = lua_resume(L, num_args);
 
   if (0 == rc) {
     state_ = State::Finished;
@@ -43,9 +44,25 @@ void Coroutine::resume(int num_args, const std::function<void()>& yield_callback
     yield_callback();
   } else {
     state_ = State::Finished;
-    const char* error = lua_tostring(coroutine_state_.get(), -1);
+    const char* error = lua_tostring(L, -1);
     if (!error) {
       error = "unspecified lua error";
+    }
+    lua_getfield(L, LUA_GLOBALSINDEX, "debug");
+    if (lua_istable(L, -1)) {
+      lua_getfield(L, -1, "traceback");
+      if (lua_isfunction(L, -1)) {
+          lua_pushstring(L, error);  /* pass error message */
+          lua_pushinteger(L, 0);  /* use 2 to skip this function and traceback */
+          lua_call(L, 2, 1);  /* call debug.traceback */
+          const char *tb = lua_tostring(L, -1);
+          if (!tb) { tb = "traceback failed"; }
+          ENVOY_LOG(error, tb);
+      } else {
+        lua_pop(L, 2);
+     }
+    } else {
+        lua_pop(L, 1);
     }
     throw LuaException(error);
   }
